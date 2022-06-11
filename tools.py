@@ -37,7 +37,7 @@ def compute_lbp_histogram(image, number_of_points, radius, method='uniform'):
     return histogram, lbp
 
 
-def DET_curve(y, pred_proba, log_scale=True, save_name="xx"):
+def DET_curve(y, pred_proba, log_scale=True, save_name=None):
     y_users = y[np.where(y == 1)]
     y_spoofs = y[np.where(y == 0)]
 
@@ -85,15 +85,17 @@ def DET_curve(y, pred_proba, log_scale=True, save_name="xx"):
         ax1.set_yticklabels(['0', '100'])
         ax1.set_xlim([-5, 105]), ax1.set_ylim([-5, 105])
 
-    # plt.savefig("DET_" + save_name + ".pdf", format='pdf', bbox_inches='tight')
-    # plt.savefig("DET_" + save_name + ".svg", format='svg', bbox_inches='tight')
+    if save_name is not None:
+        plt.savefig(save_name + ".pdf", format='pdf', bbox_inches='tight')
+        plt.savefig(save_name + ".svg", format='svg', bbox_inches='tight')
 
-    plt.show()
+    f.tight_layout()
+    f.show()
 
     return APCER, BPCER, ths
 
 
-def roc_pr_curves(y, pred_proba, save_name="xx"):
+def roc_pr_curves(y, pred_proba, save_name=None):
     fpr, tpr, thresholds_roc = metrics.roc_curve(y, pred_proba)
     precision, recall, thresholds_pr = metrics.precision_recall_curve(y, pred_proba)
 
@@ -103,7 +105,6 @@ def roc_pr_curves(y, pred_proba, save_name="xx"):
 
     gs_kw = dict(width_ratios=[2.5, 3])
     f, (ax1, ax2) = plt.subplots(1, 2, figsize=cm2inch(15, 7), gridspec_kw=gs_kw)
-    f.tight_layout(pad=3)
 
     lc = colorline(fpr, tpr, thresholds_roc, ax1)
     # ax1.plot(fpr, tpr, label='a' , linewidth=1, color = [0,0,0])
@@ -128,10 +129,12 @@ def roc_pr_curves(y, pred_proba, save_name="xx"):
 
     plt.colorbar(lc)
 
-    # plt.savefig("ROC_PR_" + save_name + ".pdf", format='pdf', bbox_inches='tight')
-    # plt.savefig("ROC_PR_" + save_name + ".svg", format='svg', bbox_inches='tight')
+    if save_name is not None:
+        plt.savefig(save_name + ".pdf", format='pdf', bbox_inches='tight')
+        plt.savefig(save_name + ".svg", format='svg', bbox_inches='tight')
 
-    plt.show()
+    f.tight_layout()
+    f.show()
 
 
 def make_segments(x, y):
