@@ -13,7 +13,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
-from tools import compute_multichannel_lbp_histogram
+from tools import compute_multichannel_lbp_histogram, roc_pr_curves, DET_curve
 
 
 def get_image_data(image_path):
@@ -49,7 +49,7 @@ def generate_dataframe(folder):
         image_data = get_image_data(image_path)
         image = cv2.imread(image_path)
         lbp_histogram = compute_multichannel_lbp_histogram(image, n_points, radius)
-        image_data['lbp_histogram'] = lbp_histogram.flatten()
+        image_data['features'] = lbp_histogram.flatten()
         data.append(image_data)
 
     df = pd.DataFrame(data)
@@ -57,7 +57,7 @@ def generate_dataframe(folder):
 
 
 def split_dataset(df):
-    X = np.vstack(df['lbp_histogram'].values)
+    X = np.vstack(df['features'].values)
     Y = (df['attack'].values != -1).astype(float)
     splitter = StratifiedShuffleSplit(n_splits=1, test_size=.25, random_state=12345)
     split_ix = splitter.split(X, Y)
@@ -71,19 +71,9 @@ def split_dataset(df):
     return X_train, Y_train, X_test, Y_test
 
 
-if __name__ == "__main__":
-    generate = True
-
-    if generate:
-        images_path = "data/flir"
-        df = generate_dataframe(images_path)
-        df.to_pickle('out/flir_dataset.pkl')
-    else:
-        df = pd.read_pickle('out/flir_dataset.pkl')
-
-    X_train, Y_train, X_test, Y_test = split_dataset(df)
-
-    classifier = SVC(kernel='sigmoid', C=100.0, gamma='auto', random_state=12345)
+def fit_clf(dataset):
+    X_train, Y_train, X_test, Y_test = split_dataset(dataset)
+    classifier = SVC(kernel='sigmoid', C=100.0, gamma='auto', random_state=12345, probability=True)
 
     scaler = MinMaxScaler()
     X_train = scaler.fit_transform(X_train[:, :26])
@@ -91,6 +81,40 @@ if __name__ == "__main__":
 
     X_test = scaler.transform(X_test[:, :26])
     prediction = classifier.predict(X_test)
+    prediction_proba = classifier.predict_proba(X_test)[:, 1]
+
+    return X_test, Y_test, prediction, prediction_proba
+
+
+if __name__ == "__main__":
+    import argparse
+
+    plt.rcParams.update({'font.size': 7})
+    plt.rcParams['font.family'] = 'serif'
+    plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
+
+    def options():
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-g', '--generate', help='Regenerate dataset', action='store_true')
+        parser.add_argument('-o', '--output', help='Output folder for images and pkl files',
+                            default='out/flir_analysis')
+        return parser
+
+    args = options().parse_args()
+    generate = args.generate
+    output_folder = args.output
+
+    if generate:
+        images_path = "data/flir"
+        df = generate_dataframe(images_path)
+        df.to_pickle(os.path.join(output_folder, 'dataset.pkl'))
+    else:
+        df = pd.read_pickle(os.path.join(output_folder, 'dataset.pkl'))
+
+    X_test, Y_test, prediction, prediction_proba = fit_clf(df)
+
+    roc_pr_curves(Y_test, prediction_proba, save_name=os.path.join(output_folder, "flir_roc"))
+    APCER_1, BPCER_1, ths_1 = DET_curve(Y_test, prediction_proba, save_name=os.path.join(output_folder, "flir_det"))
 
     cm = metrics.confusion_matrix(Y_test, prediction)
     accuracy = metrics.accuracy_score(Y_test, prediction)

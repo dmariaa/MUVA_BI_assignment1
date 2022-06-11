@@ -139,13 +139,17 @@ if __name__ == "__main__":
         dataset = pd.read_pickle(os.path.join(output_folder, 'dataset.pkl'))
 
     X_1, y_1, pred_1, pred_proba_1 = fit_clf(dataset.query('attack!=2 and mode==1'))
-    roc_pr_curves(y_1, pred_proba_1, save_name="1")
+    roc_pr_curves(y_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_roc"))
+    APCER_1, BPCER_1, ths_1 = DET_curve(y_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_det"))
 
     X_2, y_2, pred_2, pred_proba_2 = fit_clf(dataset.query('attack!=2 and mode==2'))
-    roc_pr_curves(y_2, pred_proba_2, save_name="1")
+    roc_pr_curves(y_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_roc"))
+    APCER_2, BPCER_2, ths_2 = DET_curve(y_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_det"))
 
     X_3, y_3, pred_3, pred_proba_3 = fit_clf(dataset.query('attack!=2 and mode==3'))
-    roc_pr_curves(y_3, pred_proba_3, save_name="1")
+    roc_pr_curves(y_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_roc"))
+    APCER_3, BPCER_3, ths_3 = DET_curve(y_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_det"))
 
     X_4, y_4, pred_4, pred_proba_4 = fit_clf(dataset.query('attack!=2 and mode==4'))
-    roc_pr_curves(y_4, pred_proba_4, save_name="1")
+    roc_pr_curves(y_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_roc"))
+    APCER_4, BPCER_4, ths_4 = DET_curve(y_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_det"), log_scale=False)
