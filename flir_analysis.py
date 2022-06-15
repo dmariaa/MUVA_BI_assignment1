@@ -13,7 +13,7 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 
-from tools import compute_multichannel_lbp_histogram, roc_pr_curves, DET_curve
+from tools import compute_multichannel_lbp_histogram, roc_pr_curves, DET_curve, confusion_matrix
 
 
 def get_image_data(image_path):
@@ -48,7 +48,7 @@ def generate_dataframe(folder):
         print(f"Processing image {i} of {len(images)}", end='\r')
         image_data = get_image_data(image_path)
         image = cv2.imread(image_path)
-        lbp_histogram = compute_multichannel_lbp_histogram(image, n_points, radius)
+        lbp_histogram, _ = compute_multichannel_lbp_histogram(image, n_points, radius)
         image_data['features'] = lbp_histogram.flatten()
         data.append(image_data)
 
@@ -60,7 +60,7 @@ def split_dataset(df):
     X = np.vstack(df['features'].values)
     Y = (df['attack'].values != -1).astype(float)
     splitter = StratifiedShuffleSplit(n_splits=1, test_size=.25, random_state=12345)
-    split_ix = splitter.split(X, Y)
+    split_ix = splitter.split(X, df['attack'].values)
 
     for train_ix, test_ix in split_ix:
         X_train = X[train_ix]
@@ -71,27 +71,25 @@ def split_dataset(df):
     return X_train, Y_train, X_test, Y_test
 
 
-def fit_clf(dataset):
-    X_train, Y_train, X_test, Y_test = split_dataset(dataset)
+def fit_clf(X_train, Y_train):
     classifier = SVC(kernel='sigmoid', C=100.0, gamma='auto', random_state=12345, probability=True)
 
     scaler = MinMaxScaler()
-    X_train = scaler.fit_transform(X_train[:, :26])
+    X_train = scaler.fit_transform(X_train)
     classifier.fit(X_train, Y_train)
 
-    X_test = scaler.transform(X_test[:, :26])
-    prediction = classifier.predict(X_test)
-    prediction_proba = classifier.predict_proba(X_test)[:, 1]
+    return classifier, scaler
 
-    return X_test, Y_test, prediction, prediction_proba
+
+def predict(X, classifier, scaler):
+    X = scaler.transform(X)
+    prediction = classifier.predict(X)
+    prediction_proba = classifier.predict_proba(X)[:, 1]
+    return prediction, prediction_proba
 
 
 if __name__ == "__main__":
     import argparse
-
-    plt.rcParams.update({'font.size': 7})
-    plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
 
     def options():
         parser = argparse.ArgumentParser()
@@ -99,6 +97,7 @@ if __name__ == "__main__":
         parser.add_argument('-o', '--output', help='Output folder for images and pkl files',
                             default='out/flir_analysis')
         return parser
+
 
     args = options().parse_args()
     generate = args.generate
@@ -111,25 +110,32 @@ if __name__ == "__main__":
     else:
         df = pd.read_pickle(os.path.join(output_folder, 'dataset.pkl'))
 
-    X_test, Y_test, prediction, prediction_proba = fit_clf(df)
+    X_train, Y_train, X_test, Y_test = split_dataset(df)
+    classifier, scaler = fit_clf(X_train, Y_train)
 
-    roc_pr_curves(Y_test, prediction_proba, save_name=os.path.join(output_folder, "flir_roc"))
-    APCER_1, BPCER_1, ths_1 = DET_curve(Y_test, prediction_proba, save_name=os.path.join(output_folder, "flir_det"))
+    # Stats around train dataset
+    prediction, prediction_proba = predict(X_train, classifier, scaler)
+    roc_pr_curves(Y_train, prediction_proba, save_name=os.path.join(output_folder, "flir_roc_train"))
+    APCER_train, BPCER_train, ths_train = DET_curve(Y_train, prediction_proba,
+                                                    save_name=os.path.join(output_folder, "flir_det_train"))
+    accuracy, tn, fp, fn, tp = confusion_matrix(Y_train, prediction,
+                                                save_name=os.path.join(output_folder, "confusion_matrix_train"))
+    # Stats around test dataset
+    prediction, prediction_proba = predict(X_test, classifier, scaler)
+    roc_pr_curves(Y_test, prediction_proba, save_name=os.path.join(output_folder, "flir_roc_test"))
+    APCER_test, BPCER_test, ths_test = DET_curve(Y_test, prediction_proba,
+                                                 save_name=os.path.join(output_folder, "flir_det_test"))
 
-    cm = metrics.confusion_matrix(Y_test, prediction)
-    accuracy = metrics.accuracy_score(Y_test, prediction)
-    tn, fp, fn, tp = cm.flatten()
+    accuracy, tn, fp, fn, tp = confusion_matrix(Y_test, prediction,
+                                                save_name=os.path.join(output_folder, "confusion_matrix_test"))
 
-    cm_df = pd.DataFrame(cm, index=['live', 'fake'], columns=['live', 'fake'])
-    fig, ax = plt.subplots(figsize=(6.4, 4.8))
-    seaborn.heatmap(cm_df, annot=True, ax=ax)
-    plt.show()
-
-    apcer = fn / (tp + fn)
-    npcer = fp / (fp + tn)
-    print(f"Accuracy: {accuracy}")
-    print(f"APCER: {apcer}")
-    print(f"NPCER: {npcer}")
-    print(f"ACER: {(apcer + npcer) / 2}")
-    print(f"FRR: {fn / (tp + fn)}")
-    print(f"FAR: {fp / (fp + tn)}")
+    # Generate excel table for DET
+    # out_DATA = {
+    #     "APCER_train": APCER_train,
+    #     "BPCER_train": BPCER_train,
+    #     "APCER_test": APCER_test,
+    #     "BPCER_test": BPCER_test,
+    # }
+    #
+    # out_DATA_df = pd.DataFrame(out_DATA)
+    # out_DATA_df.to_excel(os.path.join(output_folder, "DET_flir.xlsx"))

@@ -10,8 +10,9 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.preprocessing import MinMaxScaler
 
-from tools import compute_lbp_histogram, roc_pr_curves, DET_curve
+from tools import get_split_dataset_idx, set_split_dataset_idx, compute_lbp_histogram, roc_pr_curves, DET_curve, cm2inch
 
 
 def face_segmentator(image):
@@ -101,17 +102,18 @@ def extract_features(base_path):
     return df
 
 
-def fit_clf(dataset):
-    X = np.vstack(dataset['features'].values)
-    y = (dataset['attack'].values != -1).astype(float)
+def fit_clf(X_train, X_test, Y_train, Y_test):
+    classifier = LDA()
 
-    # LDA
-    clf = LDA()
-    clf.fit(X, y)
-    pred = clf.predict(X)
-    pred_proba = clf.predict_proba(X)[:, 1]
+    scaler = MinMaxScaler()
+    X_train = scaler.fit_transform(X_train)
+    classifier.fit(X_train, Y_train)
 
-    return X, y, pred, pred_proba
+    X_test = scaler.transform(X_test)
+    prediction = classifier.predict(X_test)
+    prediction_proba = classifier.predict_proba(X_test)[:, 1]
+
+    return prediction, prediction_proba
 
 
 if __name__ == "__main__":
@@ -138,18 +140,56 @@ if __name__ == "__main__":
     else:
         dataset = pd.read_pickle(os.path.join(output_folder, 'dataset.pkl'))
 
-    X_1, y_1, pred_1, pred_proba_1 = fit_clf(dataset.query('attack!=2 and mode==1'))
-    roc_pr_curves(y_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_roc"))
-    APCER_1, BPCER_1, ths_1 = DET_curve(y_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_det"))
+    train_idx, test_idx = get_split_dataset_idx(dataset.query('mode==1'))
 
-    X_2, y_2, pred_2, pred_proba_2 = fit_clf(dataset.query('attack!=2 and mode==2'))
-    roc_pr_curves(y_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_roc"))
-    APCER_2, BPCER_2, ths_2 = DET_curve(y_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_det"))
+    # Test
 
-    X_3, y_3, pred_3, pred_proba_3 = fit_clf(dataset.query('attack!=2 and mode==3'))
-    roc_pr_curves(y_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_roc"))
-    APCER_3, BPCER_3, ths_3 = DET_curve(y_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_det"))
+    X_train_1, X_test_1, Y_train_1, Y_test_1 = set_split_dataset_idx(dataset.query('mode==1'), train_idx, test_idx)
+    pred_1, pred_proba_1 = fit_clf(X_train_1, X_test_1, Y_train_1, Y_test_1)
+    roc_pr_curves(Y_test_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_roc_test"))
+    APCER_1_test, BPCER_1_test, ths_1_test = DET_curve(Y_test_1, pred_proba_1,
+                                                       save_name=os.path.join(output_folder, "mode1_det_test"))
 
-    X_4, y_4, pred_4, pred_proba_4 = fit_clf(dataset.query('attack!=2 and mode==4'))
-    roc_pr_curves(y_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_roc"))
-    APCER_4, BPCER_4, ths_4 = DET_curve(y_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_det"), log_scale=False)
+    X_train_2, X_test_2, Y_train_2, Y_test_2 = set_split_dataset_idx(dataset.query('mode==2'), train_idx, test_idx)
+    pred_2, pred_proba_2 = fit_clf(X_train_2, X_test_2, Y_train_2, Y_test_2)
+    roc_pr_curves(Y_test_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_roc_test"))
+    APCER_2_test, BPCER_2_test, ths_2_test = DET_curve(Y_test_2, pred_proba_2,
+                                                       save_name=os.path.join(output_folder, "mode2_det_test"))
+
+    X_train_3, X_test_3, Y_train_3, Y_test_3 = set_split_dataset_idx(dataset.query('mode==3'), train_idx, test_idx)
+    pred_3, pred_proba_3 = fit_clf(X_train_3, X_test_3, Y_train_3, Y_test_3)
+    roc_pr_curves(Y_test_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_roc_test"))
+    APCER_3_test, BPCER_3_test, ths_3_test = DET_curve(Y_test_3, pred_proba_3,
+                                                       save_name=os.path.join(output_folder, "mode3_det_test"))
+
+    X_train_4, X_test_4, Y_train_4, Y_test_4 = set_split_dataset_idx(dataset.query('mode==4'), train_idx, test_idx)
+    pred_4, pred_proba_4 = fit_clf(X_train_4, X_test_4, Y_train_4, Y_test_4)
+    roc_pr_curves(Y_test_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_roc_test"))
+    APCER_4_test, BPCER_4_test, ths_4_test = DET_curve(Y_test_4, pred_proba_4,
+                                                       save_name=os.path.join(output_folder, "mode4_det_test"))
+
+    # Train
+    X_train_1, X_test_1, Y_train_1, Y_test_1 = set_split_dataset_idx(dataset.query('mode==1'), train_idx, test_idx)
+    pred_1, pred_proba_1 = fit_clf(X_train_1, X_train_1, Y_train_1, Y_train_1)
+    roc_pr_curves(Y_train_1, pred_proba_1, save_name=os.path.join(output_folder, "mode1_roc_train"))
+    APCER_1_train, BPCER_1_train, ths_1_train = DET_curve(Y_train_1, pred_proba_1,
+                                                          save_name=os.path.join(output_folder, "mode1_det_train"))
+
+    X_train_2, X_test_2, Y_train_2, Y_test_2 = set_split_dataset_idx(dataset.query('mode==2'), train_idx, test_idx)
+    pred_2, pred_proba_2 = fit_clf(X_train_2, X_train_2, Y_train_2, Y_train_2)
+    roc_pr_curves(Y_train_2, pred_proba_2, save_name=os.path.join(output_folder, "mode2_roc_train"))
+    APCER_2_train, BPCER_2_train, ths_2_train = DET_curve(Y_train_2, pred_proba_2,
+                                                          save_name=os.path.join(output_folder, "mode2_det_train"))
+
+    X_train_3, X_test_3, Y_train_3, Y_test_3 = set_split_dataset_idx(dataset.query('mode==3'), train_idx, test_idx)
+    pred_3, pred_proba_3 = fit_clf(X_train_3, X_train_3, Y_train_3, Y_train_3)
+    roc_pr_curves(Y_train_3, pred_proba_3, save_name=os.path.join(output_folder, "mode3_roc_train"))
+    APCER_3_train, BPCER_3_train, ths_3_train = DET_curve(Y_train_3, pred_proba_3,
+                                                          save_name=os.path.join(output_folder, "mode3_det_train"))
+
+    X_train_4, X_test_4, Y_train_4, Y_test_4 = set_split_dataset_idx(dataset.query('mode==4'), train_idx, test_idx)
+    pred_4, pred_proba_4 = fit_clf(X_train_4, X_train_4, Y_train_4, Y_train_4)
+    roc_pr_curves(Y_train_4, pred_proba_4, save_name=os.path.join(output_folder, "mode4_roc_train"))
+    APCER_4_train, BPCER_4_train, ths_4_train = DET_curve(Y_train_4, pred_proba_4,
+                                                          save_name=os.path.join(output_folder, "mode4_det_train"),
+                                                          log_scale=False)
